@@ -112,12 +112,14 @@ class ReelsController {
                 this.updateTimeUI();
             });
             video.addEventListener('pause', () => this.updateTimeUI());
+            video.addEventListener('volumechange', () => this.updateMuteUI());
         }
         
         this.ui.style.display = 'flex';
         this.updateUIPosition();
         this.updateSpeedUI();
         this.updateTimeUI();
+        this.updateMuteUI();
         this.resetFadeTimeout();
     }
     
@@ -146,7 +148,10 @@ class ReelsController {
                     <button class="ig-reels-speed-btn" data-speed="1.5">1.5×</button>
                     <button class="ig-reels-speed-btn" data-speed="2">2×</button>
                 </div>
-                <div class="ig-reels-time-display">00:00 / 00:00</div>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button class="ig-reels-speed-btn ig-reels-mute-btn" style="padding: 4px 6px;">🔊</button>
+                    <div class="ig-reels-time-display">00:00 / 00:00</div>
+                </div>
             </div>
             <div class="ig-reels-timeline-container">
                 <div class="ig-reels-timeline-track">
@@ -168,6 +173,19 @@ class ReelsController {
                 this.setSpeed(speed);
             });
         });
+        
+        // Mute control
+        const muteBtn = this.ui.querySelector('.ig-reels-mute-btn');
+        if (muteBtn) {
+            muteBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (this.activeVideo) {
+                    // Toggle native muted state
+                    this.activeVideo.muted = !this.activeVideo.muted;
+                }
+            });
+        }
         
         // Timeline seeking
         const timeline = this.ui.querySelector('.ig-reels-timeline-container');
@@ -254,6 +272,14 @@ class ReelsController {
                 btn.classList.remove('active');
             }
         });
+    }
+    
+    updateMuteUI() {
+        if (!this.ui || !this.activeVideo) return;
+        const muteBtn = this.ui.querySelector('.ig-reels-mute-btn');
+        if (muteBtn) {
+            muteBtn.textContent = this.activeVideo.muted || this.activeVideo.volume === 0 ? '🔇' : '🔊';
+        }
     }
     
     formatTime(seconds) {
