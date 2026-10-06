@@ -18,6 +18,9 @@
   transition: opacity 0.3s ease;
   pointer-events: none;
   backdrop-filter: blur(8px);
+  height: max-content;
+  min-height: unset;
+  box-sizing: border-box;
 }
 
 .ig-reels-controller.visible {
