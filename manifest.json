@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Instagram Reels Playback Controller",
+  "version": "1.0.0",
+  "description": "Playback speed and timeline controls for Instagram Reels.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://*.instagram.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://*.instagram.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

@@ -1,0 +1,100 @@
+.ig-reels-controller {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 400px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 12px;
+  padding: 10px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 999999;
+  color: white;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+.ig-reels-controller.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ig-reels-controls-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ig-reels-speed-controls {
+  display: flex;
+  gap: 5px;
+}
+
+.ig-reels-speed-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: bold;
+  transition: background 0.2s;
+}
+
+.ig-reels-speed-btn:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.ig-reels-speed-btn.active {
+  background: #0095f6;
+}
+
+.ig-reels-time-display {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.ig-reels-timeline-container {
+  height: 20px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+  touch-action: none; /* Prevent scrolling while dragging on touch devices */
+}
+
+.ig-reels-timeline-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  position: relative;
+  pointer-events: none;
+}
+
+.ig-reels-timeline-progress {
+  height: 100%;
+  background: #0095f6;
+  border-radius: 2px;
+  width: 0%;
+}
+
+.ig-reels-timeline-thumb {
+  width: 12px;
+  height: 12px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  left: 0%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
