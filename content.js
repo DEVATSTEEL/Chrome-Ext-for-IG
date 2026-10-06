@@ -48,14 +48,7 @@ class ReelsController {
     }
     
     checkForActiveVideo() {
-        if (!window.location.pathname.includes('/reels/')) {
-            if (this.ui && this.ui.parentNode) {
-                this.ui.style.display = 'none';
-            }
-            this.activeVideo = null;
-            return;
-        }
-        
+        // Removed pathname restriction so it works on /p/, /reel/, and feed pages
         const videos = Array.from(document.querySelectorAll('video'));
         let bestVideo = null;
         let maxScore = 0;
@@ -297,7 +290,7 @@ class ReelsController {
     setupKeyboardShortcuts() {
         document.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
-            if (!this.activeVideo || !window.location.pathname.includes('/reels/')) return;
+            if (!this.activeVideo) return;
 
             switch (e.key) {
                 case '1':
