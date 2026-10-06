@@ -1,4 +1,4 @@
-const DEBUG = false;
+const DEBUG = true;
 function log(...args) {
     if (DEBUG) console.log("[Reels Controller]", ...args);
 }
@@ -19,7 +19,6 @@ class ReelsController {
         const data = await chrome.storage.local.get("instagramReelsPlaybackSpeed");
         this.playbackSpeed = data.instagramReelsPlaybackSpeed || 1;
         
-        // Listen for storage changes from popup
         chrome.storage.onChanged.addListener((changes, namespace) => {
             if (namespace === 'local' && changes.instagramReelsPlaybackSpeed) {
                 this.playbackSpeed = changes.instagramReelsPlaybackSpeed.newValue;
@@ -30,9 +29,9 @@ class ReelsController {
             }
         });
 
+        this.createUI();
         this.startObserver();
         this.startPeriodicCheck();
-        
         this.setupKeyboardShortcuts();
     }
     
@@ -44,35 +43,38 @@ class ReelsController {
     }
     
     startPeriodicCheck() {
-        setInterval(() => this.checkForActiveVideo(), 500);
+        // Run frequently to ensure position stays updated during scrolling
+        setInterval(() => this.checkForActiveVideo(), 200);
     }
     
     checkForActiveVideo() {
-        // Only attach if URL indicates Reels
         if (!window.location.pathname.includes('/reels/')) {
             if (this.ui && this.ui.parentNode) {
-                this.ui.parentNode.removeChild(this.ui);
-                this.ui = null;
-                this.activeVideo = null;
+                this.ui.style.display = 'none';
             }
+            this.activeVideo = null;
             return;
         }
         
         const videos = Array.from(document.querySelectorAll('video'));
         let bestVideo = null;
-        let maxArea = 0;
+        let maxScore = 0;
         
         for (const video of videos) {
             const rect = video.getBoundingClientRect();
-            // Check if visible within viewport
-            if (rect.width > 0 && rect.height > 0 && rect.top < window.innerHeight && rect.bottom > 0) {
-                const area = rect.width * rect.height;
-                // Prefer playing videos
+            
+            // Calculate strictly the visible area within the viewport
+            const visibleWidth = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0));
+            const visibleHeight = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
+            const visibleArea = visibleWidth * visibleHeight;
+            
+            if (visibleArea > 0) {
                 const isPlaying = !video.paused && !video.ended && video.readyState > 2;
-                const score = area * (isPlaying ? 2 : 1);
+                // Heavily weight currently playing videos
+                const score = visibleArea * (isPlaying ? 100 : 1);
                 
-                if (score > maxArea) {
-                    maxArea = score;
+                if (score > maxScore) {
+                    maxScore = score;
                     bestVideo = video;
                 }
             }
@@ -80,24 +82,25 @@ class ReelsController {
         
         if (bestVideo && bestVideo !== this.activeVideo) {
             this.attachToVideo(bestVideo);
-        } else if (!bestVideo && this.activeVideo) {
-            // Video might have been removed or scrolled out
+        } else if (this.activeVideo) {
+            // Check if active video is still in DOM and visible
             const rect = this.activeVideo.getBoundingClientRect();
             if (rect.width === 0 || rect.height === 0 || !document.body.contains(this.activeVideo)) {
                 this.activeVideo = null;
-                if (this.ui && this.ui.parentNode) {
-                    this.ui.parentNode.removeChild(this.ui);
-                    this.ui = null;
-                }
+                this.ui.style.display = 'none';
+            } else {
+                this.updateUIPosition();
             }
+        } else {
+            this.ui.style.display = 'none';
         }
     }
     
     attachToVideo(video) {
-        log("Attaching to new video");
+        log("Attaching to new active video");
         this.activeVideo = video;
         
-        // Apply saved speed
+        // Force speed on attach
         video.playbackRate = this.playbackSpeed;
         
         if (!this.initializedVideos.has(video)) {
@@ -107,42 +110,37 @@ class ReelsController {
             video.addEventListener('durationchange', () => this.updateTimeUI());
             video.addEventListener('timeupdate', () => this.updateTimeUI());
             video.addEventListener('ratechange', () => {
-                // Keep our speed enforced if IG tries to reset it (except when user changes it intentionally from our UI)
                 if (video.playbackRate !== this.playbackSpeed && !this.isDragging) {
                      video.playbackRate = this.playbackSpeed;
                 }
             });
-            video.addEventListener('play', () => this.updateTimeUI());
+            video.addEventListener('play', () => {
+                video.playbackRate = this.playbackSpeed;
+                this.updateTimeUI();
+            });
             video.addEventListener('pause', () => this.updateTimeUI());
         }
         
-        this.createOrUpdateUI(video);
-    }
-    
-    createOrUpdateUI(video) {
-        if (!this.ui) {
-            this.createUI();
-        }
-        
-        // Find a suitable relative container (usually the div wrapping the video)
-        let container = video.parentElement;
-        while (container && container.tagName !== 'DIV') {
-            container = container.parentElement;
-        }
-        if (container && this.ui.parentNode !== container) {
-            container.appendChild(this.ui);
-            
-            // Force relative positioning on parent if not already set, for absolute positioning
-            const style = window.getComputedStyle(container);
-            if (style.position === 'static') {
-                container.style.position = 'relative';
-            }
-        }
-        
+        this.ui.style.display = 'flex';
+        this.updateUIPosition();
         this.updateSpeedUI();
         this.updateTimeUI();
-        this.ui.classList.add('visible');
         this.resetFadeTimeout();
+    }
+    
+    updateUIPosition() {
+        if (!this.ui || !this.activeVideo) return;
+        const rect = this.activeVideo.getBoundingClientRect();
+        
+        // Position fixed to the viewport directly over the video element
+        this.ui.style.position = 'fixed';
+        // Center horizontally relative to the video
+        this.ui.style.left = `${rect.left + (rect.width / 2)}px`;
+        // Position slightly above the bottom of the video
+        this.ui.style.top = `${rect.bottom - 75}px`;
+        this.ui.style.transform = 'translateX(-50%)';
+        // Match width to video, with some padding
+        this.ui.style.width = `${Math.min(rect.width * 0.9, 400)}px`;
     }
     
     createUI() {
@@ -165,10 +163,14 @@ class ReelsController {
             </div>
         `;
         
+        // Append directly to body to bypass any Instagram CSS container clipping
+        document.body.appendChild(this.ui);
+        
         // Speed controls
         this.ui.querySelectorAll('.ig-reels-speed-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                e.stopPropagation(); // prevent clicking through to pause/play video
+                e.preventDefault();
+                e.stopPropagation();
                 const speed = parseFloat(btn.dataset.speed);
                 this.setSpeed(speed);
             });
@@ -189,6 +191,7 @@ class ReelsController {
         };
         
         timeline.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
             e.stopPropagation();
             this.isDragging = true;
             timeline.setPointerCapture(e.pointerId);
@@ -198,6 +201,7 @@ class ReelsController {
         
         timeline.addEventListener('pointermove', (e) => {
             if (this.isDragging) {
+                e.preventDefault();
                 e.stopPropagation();
                 seek(e);
                 this.resetFadeTimeout();
@@ -206,6 +210,7 @@ class ReelsController {
         
         timeline.addEventListener('pointerup', (e) => {
             if (this.isDragging) {
+                e.preventDefault();
                 e.stopPropagation();
                 this.isDragging = false;
                 timeline.releasePointerCapture(e.pointerId);
@@ -213,14 +218,14 @@ class ReelsController {
             }
         });
         
-        // Stop events bubbling up to Instagram elements to avoid pause/mute toggle
+        // Prevent event bubbling to avoid pausing/unpausing the video behind the controls
         this.ui.addEventListener('click', e => e.stopPropagation());
         this.ui.addEventListener('dblclick', e => e.stopPropagation());
         
         // Handle fading
         this.fadeTimeout = null;
         document.addEventListener('mousemove', (e) => {
-            if (this.ui && document.body.contains(this.ui)) {
+            if (this.ui && this.ui.style.display !== 'none') {
                 this.resetFadeTimeout();
             }
         });
@@ -244,7 +249,7 @@ class ReelsController {
         }
         this.updateSpeedUI();
         chrome.storage.local.set({ instagramReelsPlaybackSpeed: speed });
-        log(\`Playback speed set to ${speed}x\`);
+        log(`Playback speed set to ${speed}x`);
     }
     
     updateSpeedUI() {
@@ -265,9 +270,9 @@ class ReelsController {
         const m = Math.floor((seconds % 3600) / 60);
         const s = seconds % 60;
         if (h > 0) {
-            return \`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}\`;
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
         }
-        return \`${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}\`;
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     }
     
     updateTimeUI() {
@@ -278,22 +283,20 @@ class ReelsController {
         
         const timeDisplay = this.ui.querySelector('.ig-reels-time-display');
         if (timeDisplay) {
-            timeDisplay.textContent = \`${this.formatTime(currentTime)} / ${this.formatTime(duration)}\`;
+            timeDisplay.textContent = `${this.formatTime(currentTime)} / ${this.formatTime(duration)}`;
         }
         
         const percentage = (duration > 0) ? (currentTime / duration) * 100 : 0;
         const progress = this.ui.querySelector('.ig-reels-timeline-progress');
         const thumb = this.ui.querySelector('.ig-reels-timeline-thumb');
         
-        if (progress) progress.style.width = \`${percentage}%\`;
-        if (thumb) thumb.style.left = \`${percentage}%\`;
+        if (progress) progress.style.width = `${percentage}%`;
+        if (thumb) thumb.style.left = `${percentage}%`;
     }
     
     setupKeyboardShortcuts() {
         document.addEventListener('keydown', (e) => {
-            // Ignore if typing in an input
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
-            
             if (!this.activeVideo || !window.location.pathname.includes('/reels/')) return;
 
             switch (e.key) {
@@ -323,5 +326,4 @@ class ReelsController {
     }
 }
 
-// Initialize
 new ReelsController();
